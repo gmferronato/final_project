@@ -1,0 +1,11 @@
+libraries used in the project:
+
+BeautifulSoup
+datetime
+FPDF
+PIL
+random
+re
+requests
+sys
+time

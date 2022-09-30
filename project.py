@@ -11,29 +11,31 @@ import re
 
 def main():
 
-    x, y = get_country(input("Country: ").strip().lower())
-    global team
+    global league_1, league_2, team, year
+    league_1, league_2 = get_country(input("Country: ").strip().lower())
     team = get_name(input("Team: ").strip().title())
-    global year
     year = get_year(input("Year: ").strip())
 
-    # Set the headers
-    global headers
-    headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36"}
-
-    # Championship Urls
-    global URLS
-    URLS = [f"https://www.transfermarkt.com/serie-a/startseite/wettbewerb/{x}", f"https://www.transfermarkt.com/serie-a/startseite/wettbewerb/{y}"]
-
-    squad, logo = get_squad(get_team(team, year))
+    squad, logo = get_squad(get_team(league_1, league_2, team, year))
 
     get_pdf(squad, logo)
+
     print("Done!")
 
 
+def get_team(league_1, league_2, team, year):
 
-def get_team(team, year):
+    """
+    This function returns the url of a desired team.
+    It parses the html of the championship chosen by the user and creates two lists, one for team names and the other for  related links.
+    It then checks to see if the team name is in the list of teams and, if so, returns the correct url of the team with the requested year.
+    """
 
+    # Set the header
+    headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36"}
+
+    # Championships Urls
+    URLS = [f"https://www.transfermarkt.com/serie-a/startseite/wettbewerb/{league_1}", f"https://www.transfermarkt.com/serie-a/startseite/wettbewerb/{league_2}"]
 
     # Create two lists, one for the team names and the other one for the links
     team_names_list = []
@@ -43,8 +45,8 @@ def get_team(team, year):
 
     # Make the first request to the server
     for URL in URLS:
-        x = uniform(2, 4)
-        sleep(x)
+        sec = uniform(1, 2)
+        sleep(sec)
         response = requests.get(URL, headers=headers)
         soup = BeautifulSoup(response.content, 'html.parser')
         team_names = soup.find_all("td", {"class": "hauptlink no-border-links"})
@@ -56,34 +58,36 @@ def get_team(team, year):
 
 
     # Search for simplified team name in official team names list
-
     for _ in team_names_list:
         if team in _:
             team = _
 
-
+    # Exit if the name of the team is not in the list.
     if team not in team_names_list:
-        sys.exit("Can't find the team.")
+        sys.exit("Unable to find team.")
 
+    # Pair the team name with the team url
     index = team_names_list.index(team)
-
 
     if team in team_names_list:
         URL2 = team_links_list[index]
 
         print("Compiling data...")
-        x = uniform(1,3)
-        sleep(x)
 
-        if team == "Brighton &amp; Hove Albion":
-            team = "Brighton & Hove Albion"
-
+     # Return the team's url
         return URL2
 
 def get_squad(url):
 
+    """
+    This function parses the url resulting from the get_team() function and creates two lists containing all the players' names and their positions.
+    Using this data, it creates and returns a list of player name/position tuples. Then it extracts and returns the url of the team logo.
+    """
+    # Make a little pause before the request (to avoid having troubles making too many request to the server in a short amount of time while testing the function)
+    sec = uniform(1,2)
+    sleep(sec)
     # Make the second request to the server
-    response2 = requests.get(url, headers=headers)
+    response2 = requests.get(url, headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36"})
 
     soup = BeautifulSoup(response2.content, 'html.parser')
 
@@ -104,18 +108,26 @@ def get_squad(url):
     for position in range(len(positions)):
         positions_list.append(str(positions[position]).split('title="',1)[1].split('"><',1)[0].capitalize())
 
-
+    # If the players's list is empty, exit
     if len(players_list) == 0:
-        sys.exit("Sorry, can't find any data")
+        sys.exit("Sorry, unable to find any data.")
 
+    # Parse the html to obtain the team's logo
     team_logo = (str(logo).split('src="',1)[1].split('?lm=',1)[0])
 
+    # Create a list of tuples in which every name of each player is paired to his role within the team
     squad_ = list(zip(players_list, positions_list))
 
+    # return team's squad and logo
     return squad_, team_logo
 
 
 def get_country(country):
+
+    """
+    This function returns the top two leagues of a country entered by the user.
+    The only countries allowed are: England, France, Germany, Italy and Spain.
+    """
 
     countries_allowed = ["italy", "spain", "england", "france", "germany"]
     if country not in countries_allowed:
@@ -135,14 +147,22 @@ def get_country(country):
 
 def get_name(name):
 
-    matches = re.search(r"^1?\.? ?[0-9a-zA-Z ]+$", name)
+    """
+    This function returns the name entered by the user.
+    The name can contain only letters, numbers, whitespace, and a single dot.
+    There are some exceptions that cannot be traced to a pattern and therefore must be made explicit.
+    The general function returns the name entered by the user exactly as it is shown on the league page.
+    """
+
+    # Create a general, wide range pattern for the team name
+    matches = re.search(r"^1?\.? ?\w+? ?\w+?\.?-? ?[0-9a-zA-ZüÉé& ]+$", name)
     if matches:
         names = name.split()
 
         # French championships exceptions
 
         if name.title() in ["Psg", "Paris Saint Germain", "Paris", "Paris Sg"]:
-            return f"Paris Saint-Germain"
+            return "Paris Saint-Germain"
         elif name.title() in ["Olympique Lyonnais", "Lyon", "Ol"]:
             return "Olympique Lyon"
         elif name.title() in ["Saint Etienne", "As Saint Etienne", "Saint-Etienne", "A.S.S.E."]:
@@ -214,6 +234,8 @@ def get_name(name):
             return "SpVgg Greuther Fürth"
         elif name.title() in ["Fortuna Dusseldorf", "Dusseldorf"]:
             return "Fortuna Düsseldorf"
+        elif name.title() in ["St. Pauli", "St Pauli", "Fc St Pauli"]:
+            return "FC St. Pauli"
 
         # English championships exceptions
 
@@ -227,7 +249,6 @@ def get_name(name):
             return "Brighton &amp; Hove Albion"
 
         # General function
-
 
         if len(names) < 1:
             sys.exit("Insert a team")
@@ -284,6 +305,11 @@ def get_name(name):
 
 def get_year(year):
 
+    """
+    This function returns the year entered by the user.
+    The year must consist of four digits only; it cannot go beyond the current year or be earlier than the year 1900.
+    """
+
     x = datetime.datetime.now()
     current_year = x.year
 
@@ -298,55 +324,53 @@ def get_year(year):
 
 def get_pdf(squad, logo):
 
-    # Extract dominant color from team logo
+    """
+    This function produces a formatted pdf containing the lineup of the team in the year in question.
+    It contains the team logo, team name and year contained in two lines, and all data about the players and their positions within the team.
+    The lines, team name and year take the less dominant color of the team logo as their own color.
+    """
+
+    # Extract less dominant color from team logo
     im = Image.open(requests.get(logo, stream=True).raw)
     im = im.convert('RGB')
     colors = im.getcolors(im.size[0]*im.size[1])
 
+    less_dominant_color = min(colors)
 
-    dominant_color = min(colors)
-    other_color = max(colors)
-
-
-    value, RGB_values = dominant_color
+    value, RGB_values = less_dominant_color
     r, g, b = RGB_values
 
+    # Extend PDF Class
+    class PDF(FPDF):
+        def header(self):
+            self.ln(15)
+            self.image(logo, 6, 4, 30)
+            pdf.set_font("Helvetica")
+            self.set_font_size(5)
+            self.set_y(5)
+            self.cell(0, 10, f"Data from: Transfermarkt.co.uk", align="R")
+            self.ln(8)
+
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("helvetica", "I", 8)
+            self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="R")
+
     # Create PDF
-    pdf = FPDF()
+    pdf = PDF()
 
     pdf.add_page()
 
-    pdf.set_font("Helvetica")
-    pdf.set_font_size(5)
-    pdf.set_y(3)
-    pdf.cell(0, 10, f"Data from: Transfermarkt.co.uk", align="R")
-    pdf.ln(7)
+    pdf.set_fill_color(r=r, g=g, b=b)
+    pdf.rect(45, 18, 185, 1, style="F")
+    pdf.set_fill_color(r=r, g=g, b=b)
+    pdf.rect(45, 28, 185, 1, style="F")
 
-    if logo in ["https://tmssl.akamaized.net/images/wappen/head/1160.png", "https://tmssl.akamaized.net/images/wappen/head/276.png"]:
-        pdf.set_fill_color(r=255, g=255, b=255)
-        pdf.rect(20, 22, 10, 275, style="F")
-        pdf.set_fill_color(r=255, g=255, b=255)
-        pdf.rect(20, 15, 210, 10, style="F")
-
-        pdf.image(logo, 10, 1, 30)
-
-        pdf.set_text_color(r=0, g=0, b=0)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 21, f"{team} - {year}", border=0, align="C")
-        pdf.ln(20)
-
-    else:
-        pdf.set_fill_color(r=r, g=g, b=b)
-        pdf.rect(20, 22, 10, 275, style="F")
-        pdf.set_fill_color(r=r, g=g, b=b)
-        pdf.rect(20, 15, 210, 10, style="F")
-
-        pdf.image(logo, 10, 1, 30)
-
-        pdf.set_text_color(r=255, g=255, b=255)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 21, f"{team} - {year}", border=0, align="C")
-        pdf.ln(20)
+    pdf.set_text_color(r=r, g=g, b=b)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 21, f"{team} - {year}", border=0, align="C")
+    pdf.ln(20)
 
     line_height = pdf.font_size * 1.5
     col_width = pdf.epw / 3.5
@@ -364,12 +388,10 @@ def get_pdf(squad, logo):
     pdf.set_font("Helvetica", size=8)
     pdf.set_font(style="")
 
-
     for row in squad:
         for datum in row:
             pdf.cell(col_width, line_height, datum, border=1, align="C")
         pdf.ln(line_height)
-
 
     pdf.output(f"{team.lower().replace(' ', '_')}-{year}.pdf")
 
